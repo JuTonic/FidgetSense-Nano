@@ -1,4 +1,4 @@
-TARGET = spi
+TARGET = main
 MCU = atmega328p
 F_CPU = 16000000
 PORT = /dev/cu.usbserial-110
