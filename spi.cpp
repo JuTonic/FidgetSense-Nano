@@ -3,9 +3,9 @@
 #include <avr/interrupt.h>
 
 // SPI Chip Select pins
-#define CS1_PIN     PB2  // D10
+#define CS1_PIN     PB0  // D8
 #define CS2_PIN     PB1  // D9  
-#define CS3_PIN     PB0  // D8
+#define CS3_PIN     PB2  // D10
 
 // SPI port definitions
 #define SPI_PORT    PORTB
@@ -81,8 +81,8 @@ void print_uint32(uint32_t num) {
 
 void print_int16(int16_t value) {
     if (value < 0) {
-        print_int16(-value);
         serial_print_char('-');
+        print_int16(-value);
         return;
     }
 
@@ -167,7 +167,6 @@ void read_accelerometer_data(uint8_t cs_pin, uint8_t sensor_index) {
     sensor_data[sensor_index].y = (int16_t)((y1 << 8) | y0);
     sensor_data[sensor_index].z = (int16_t)((z1 << 8) | z0);
     
-    _delay_us(5);
     SPI_PORT |= (1 << cs_pin);
     _delay_us(5);
 }
@@ -212,7 +211,8 @@ int main() {
     while (1) {
         collect_all_sensor_data();
         send_data_package();
-        _delay_ms(100);
+        const auto DELAY_MS = 20;
+        _delay_ms(DELAY_MS);
     }
     
     return 0;
