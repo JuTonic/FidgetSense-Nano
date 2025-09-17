@@ -21,6 +21,11 @@
 #define BW_RATE        0x2C
 #define DATAX0         0x32
 
+// Buffer for sending a string
+#define BUFFER_SIZE 100
+char buffer[BUFFER_SIZE];
+uint8_t buffer_index = 0;
+
 volatile uint32_t timer_millis = 0;
 
 void setup_timer() {
@@ -59,34 +64,39 @@ void setup_serial() {
     _delay_ms(100);
 }
 
-void serial_print_char(char c) {
-    while (!(UCSR0A & (1 << UDRE0))) {
+void buffer_char(char c) {
+    if (buffer_index < BUFFER_SIZE - 1) {
+        buffer[buffer_index++] = c;
     }
-    UDR0 = c;
+}
+
+void buffer_uint32(uint32_t num) {
+    if (num >= 10) {
+        buffer_uint32(num / 10);
+    }
+    buffer_char('0' + (num % 10));
+}
+
+void buffer_int16(int16_t value) {
+    if (value < 0) {
+        buffer_char('-');
+        buffer_int16(-value);
+        return;
+    }
+    buffer_uint32(static_cast<uint32_t>(value));
 }
 
 void serial_print(const char *str) {
     while (*str) {
-        serial_print_char(*str++);
+        // Wait until the transmit buffer is empty
+        while (!(UCSR0A & (1 << UDRE0))) {
+        }
+        UDR0 = *str++;
     }
-}
-
-void print_uint32(uint32_t num) {
-    if (num >= 10) {
-        print_uint32(num / 10);
+    
+    // Wait for the last character to be sent
+    while (!(UCSR0A & (1 << TXC0))) {
     }
-
-    serial_print_char('0' + (num % 10));
-}
-
-void print_int16(int16_t value) {
-    if (value < 0) {
-        serial_print_char('-');
-        print_int16(-value);
-        return;
-    }
-
-    print_uint32(static_cast<uint32_t>(value));
 }
 
 void spi_init() {
@@ -178,19 +188,22 @@ void collect_all_sensor_data() {
 }
 
 void send_data_package() {
-    print_uint32(millis());
+    buffer_index = 0;
+    buffer_uint32(millis());
+    
     for (uint8_t i = 0; i < 3; i++) {
-        serial_print_char(';');
-        print_int16(sensor_data[i].x);
+        buffer_char(';');
+        buffer_int16(sensor_data[i].x);
         
-        serial_print_char(';');
-        print_int16(sensor_data[i].y);
+        buffer_char(';');
+        buffer_int16(sensor_data[i].y);
         
-        serial_print_char(';');
-        print_int16(sensor_data[i].z);
+        buffer_char(';');
+        buffer_int16(sensor_data[i].z);
     }
     
-    serial_print_char('\n');
+    buffer_char('\n');
+    serial_print(buffer);
 }
 
 int main() {
