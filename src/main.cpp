@@ -2,6 +2,8 @@
 #include <util/delay.h>
 #include <avr/interrupt.h>
 
+#include "serial_buffer.hpp"
+
 // SPI Chip Select pins
 #define CS1_PIN     PB0  // D8
 #define CS2_PIN     PB1  // D9  
@@ -62,41 +64,6 @@ void setup_serial() {
     UCSR0B = (1 << TXEN0);
     UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
     _delay_ms(100);
-}
-
-void buffer_char(char c) {
-    if (buffer_index < BUFFER_SIZE - 1) {
-        buffer[buffer_index++] = c;
-    }
-}
-
-void buffer_uint32(uint32_t num) {
-    if (num >= 10) {
-        buffer_uint32(num / 10);
-    }
-    buffer_char('0' + (num % 10));
-}
-
-void buffer_int16(int16_t value) {
-    if (value < 0) {
-        buffer_char('-');
-        buffer_int16(-value);
-        return;
-    }
-    buffer_uint32(static_cast<uint32_t>(value));
-}
-
-void serial_print(const char *str) {
-    while (*str) {
-        // Wait until the transmit buffer is empty
-        while (!(UCSR0A & (1 << UDRE0))) {
-        }
-        UDR0 = *str++;
-    }
-    
-    // Wait for the last character to be sent
-    while (!(UCSR0A & (1 << TXC0))) {
-    }
 }
 
 void spi_init() {
@@ -188,22 +155,25 @@ void collect_all_sensor_data() {
 }
 
 void send_data_package() {
-    buffer_index = 0;
-    buffer_uint32(millis());
+    SerialBuffer serialBuffer;
+    serialBuffer.add_uint32(millis());
     
     for (uint8_t i = 0; i < 3; i++) {
-        buffer_char(';');
-        buffer_int16(sensor_data[i].x);
+        serialBuffer.add_char(';');
+        serialBuffer.add_int16(sensor_data[i].x);
         
-        buffer_char(';');
-        buffer_int16(sensor_data[i].y);
+        serialBuffer.add_char(';');
+        serialBuffer.add_int16(sensor_data[i].y);
         
-        buffer_char(';');
-        buffer_int16(sensor_data[i].z);
+        serialBuffer.add_char(';');
+        serialBuffer.add_int16(sensor_data[i].z);
     }
-    
-    buffer_char('\n');
-    serial_print(buffer);
+
+    serialBuffer.add_char('\n');
+    serialBuffer.send();
+
+    const auto DELAY_MS = 0;
+    _delay_ms(DELAY_MS);
 }
 
 int main() {
@@ -224,8 +194,6 @@ int main() {
     while (1) {
         collect_all_sensor_data();
         send_data_package();
-        const auto DELAY_MS = 20;
-        _delay_ms(DELAY_MS);
     }
     
     return 0;

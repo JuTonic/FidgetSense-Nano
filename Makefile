@@ -1,4 +1,4 @@
-TARGET = spi
+TARGET = main
 MCU = atmega328p
 F_CPU = 16000000
 PORT = /dev/cu.usbserial-110
@@ -11,14 +11,16 @@ OBJCOPY = avr-objcopy
 AVRDUDE = avrdude
 
 BUILD_DIR = build
+SRC_DIR = src
+INC_DIR = include
 
-CFLAGS = -mmcu=$(MCU) -DF_CPU=$(F_CPU)UL -Os -Wall
+CFLAGS = -mmcu=$(MCU) -DF_CPU=$(F_CPU)UL -Os -Wall -I$(INC_DIR)
 CXXFLAGS = $(CFLAGS)
 LDFLAGS = -mmcu=$(MCU) -lm
 
-SRC = $(TARGET).cpp
+SRC = $(SRC_DIR)/$(TARGET).cpp $(SRC_DIR)/serial_buffer.cpp
 
-OBJ = $(addprefix $(BUILD_DIR)/, $(SRC:.cpp=.o))
+OBJ = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(SRC))
 
 ELF = $(BUILD_DIR)/$(TARGET).elf
 HEX = $(BUILD_DIR)/$(TARGET).hex
@@ -34,7 +36,7 @@ $(ELF): $(OBJ) | $(BUILD_DIR)
 $(HEX): $(ELF) | $(BUILD_DIR)
 	$(OBJCOPY) -O ihex -R .eeprom $< $@
 
-$(BUILD_DIR)/%.o: %.cpp | $(BUILD_DIR)
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 upload: $(HEX)
