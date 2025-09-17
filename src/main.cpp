@@ -2,10 +2,12 @@
 #include <util/delay.h>
 #include <avr/interrupt.h>
 
+#include "serial_buffer.hpp"
+
 // SPI Chip Select pins
-#define CS1_PIN     PB2  // D10
+#define CS1_PIN     PB0  // D8
 #define CS2_PIN     PB1  // D9  
-#define CS3_PIN     PB0  // D8
+#define CS3_PIN     PB2  // D10
 
 // SPI port definitions
 #define SPI_PORT    PORTB
@@ -20,6 +22,11 @@
 #define DATA_FORMAT    0x31
 #define BW_RATE        0x2C
 #define DATAX0         0x32
+
+// Buffer for sending a string
+#define BUFFER_SIZE 100
+char buffer[BUFFER_SIZE];
+uint8_t buffer_index = 0;
 
 volatile uint32_t timer_millis = 0;
 
@@ -57,36 +64,6 @@ void setup_serial() {
     UCSR0B = (1 << TXEN0);
     UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
     _delay_ms(100);
-}
-
-void serial_print_char(char c) {
-    while (!(UCSR0A & (1 << UDRE0))) {
-    }
-    UDR0 = c;
-}
-
-void serial_print(const char *str) {
-    while (*str) {
-        serial_print_char(*str++);
-    }
-}
-
-void print_uint32(uint32_t num) {
-    if (num >= 10) {
-        print_uint32(num / 10);
-    }
-
-    serial_print_char('0' + (num % 10));
-}
-
-void print_int16(int16_t value) {
-    if (value < 0) {
-        print_int16(-value);
-        serial_print_char('-');
-        return;
-    }
-
-    print_uint32(static_cast<uint32_t>(value));
 }
 
 void spi_init() {
@@ -167,7 +144,6 @@ void read_accelerometer_data(uint8_t cs_pin, uint8_t sensor_index) {
     sensor_data[sensor_index].y = (int16_t)((y1 << 8) | y0);
     sensor_data[sensor_index].z = (int16_t)((z1 << 8) | z0);
     
-    _delay_us(5);
     SPI_PORT |= (1 << cs_pin);
     _delay_us(5);
 }
@@ -179,19 +155,25 @@ void collect_all_sensor_data() {
 }
 
 void send_data_package() {
-    print_uint32(millis());
-    for (uint8_t i = 0; i < 3; i++) {
-        serial_print_char(';');
-        print_int16(sensor_data[i].x);
-        
-        serial_print_char(';');
-        print_int16(sensor_data[i].y);
-        
-        serial_print_char(';');
-        print_int16(sensor_data[i].z);
-    }
+    SerialBuffer serialBuffer;
+    serialBuffer.add_uint32(millis());
     
-    serial_print_char('\n');
+    for (uint8_t i = 0; i < 3; i++) {
+        serialBuffer.add_char(';');
+        serialBuffer.add_int16(sensor_data[i].x);
+        
+        serialBuffer.add_char(';');
+        serialBuffer.add_int16(sensor_data[i].y);
+        
+        serialBuffer.add_char(';');
+        serialBuffer.add_int16(sensor_data[i].z);
+    }
+
+    serialBuffer.add_char('\n');
+    serialBuffer.send();
+
+    const auto DELAY_MS = 0;
+    _delay_ms(DELAY_MS);
 }
 
 int main() {
@@ -212,7 +194,6 @@ int main() {
     while (1) {
         collect_all_sensor_data();
         send_data_package();
-        _delay_ms(100);
     }
     
     return 0;
